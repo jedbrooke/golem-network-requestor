@@ -8,10 +8,20 @@ import binascii
 import shlex
 import sys
 
-def handle_http_packet(data: bytes):
-    request_string = data.decode('utf-8')
+import struct
+from socketserver import ThreadingMixIn, TCPServer, StreamRequestHandler
+import threading
+from util import *
+import pickle
+
+
+
+def handle_http_packet(*args):
+    p, data = args
+    request_string = data.decode('ASCII',errors='ignore')
+    print(request_string)
     lines = request_string.splitlines()
-    request = lines[0]
+    request = lines[0] 
     host = [l for l in lines if l.startswith("Host: ")][0]
     host = host.split(": ")[1].split(":")[0]
     verb,address,version = request.split(' ')
@@ -19,75 +29,81 @@ def handle_http_packet(data: bytes):
         address = address[7:]
     elif address.startswith("https://"):
         address = address[8:]
-    print(host)
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     port = 80
     if ":" in address:
         address,port = address.split(":")
         port = int(port)
-    print(port)
     s.connect((host, port))
     s.sendall(data)
-    response = s.recv(1500)
-    print(response.decode("ASCII"))
-    print("---------")
-    return response
+    
+    first_response = True
+    while True:
+        response = s.recv(1500)
+        packet = Packet(Protocol.HTTP,response)
+        p.stdin.write(base64.urlsafe_b64encode(pickle.dumps(packet)))
+        p.stdin.write('\n'.encode('ASCII'))
+        p.stdin.flush()
+        print("read",len(response),"bytes")
+        if len(response) < 1 or (first_response and len(response) < 1400):
+            break
+        first_response = False
+    packet = Packet(Protocol.CONTROL,'die')
+    print("send die")
+    p.stdin.write(base64.urlsafe_b64encode(pickle.dumps(packet)))
+    p.stdin.write('\n'.encode('ASCII'))
+    p.stdin.flush()
 
-def main(cmd: str):
-    p = subprocess.Popen(shlex.split(cmd),shell=False,stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+def main(cmd: str,proxy_server_path="/proxy_server.py"):
+    
+    p = subprocess.Popen(shlex.split(cmd),shell=False,stdin=subprocess.PIPE, stdout=subprocess.PIPE,stderr=sys.stderr)
 
     # set stdout reads to non-blocking
     fd = p.stdout.fileno()
     flag = fcntl.fcntl(fd, fcntl.F_GETFL)
     fcntl.fcntl(fd, fcntl.F_SETFL, flag | os.O_NONBLOCK)
-    flag = fcntl.fcntl(fd, fcntl.F_GETFL)
 
-    PROC = p
-
-    first_read = True
-    while p.poll() is None:
-        data = p.stdout.read()
-        if data != None and len(data) > 0:
-            if first_read:
-                print("disable echo")
+    finished_setup = False
+    while not finished_setup:
+        try:
+            data = p.stdout.read()
+            if data != None and len(data) > 0:
+                # print("disable echo")
                 p.stdin.write("stty -echo".encode("ASCII"))
                 p.stdin.write('\n'.encode("ASCII"))
 
-                print("create a test file")
-                p.stdin.write("touch /root/hello.txt".encode("ASCII"))
-                p.stdin.write('\n'.encode("ASCII"))
-
                 print("start proxy server")
-                p.stdin.write("/usr/bin/python3 /proxy_server.py".encode('ASCII'))
+                p.stdin.write(f"/usr/bin/python3 {proxy_server_path}".encode('ASCII'))
                 p.stdin.write('\n'.encode("ASCII"))
                 p.stdin.flush()
-                first_read = False
-            else:
-                try:
-                    as_str = data.decode("ASCII").strip().lstrip()
-                    print("as_str\n",as_str)
-                    print("---------")
-                    print(base64.urlsafe_b64decode(as_str).decode('ASCII'))
-                    response = handle_http_packet(base64.urlsafe_b64decode(as_str))
-                    
-                    p.stdin.write(base64.urlsafe_b64encode(response))
-                    p.stdin.write('\n'.encode("ASCII"))
-                    p.stdin.flush()
-                except UnicodeDecodeError:
-                    print("unicode decode error")
-                except binascii.Error:
-                    print("failed to decode")
-                    print(data.decode())
-            # p.stdin.write(response)
-            # p.stdin.flush()
+                finished_setup = True
+        except TypeError as te:
+            pass
         time.sleep(0.001)
-    
+
+    # reset flags to blocking
+    fcntl.fcntl(fd, fcntl.F_SETFL, flag)
+
+
+    while p.poll() is None:
+        try:
+            data = p.stdout.readline().decode("ASCII")
+            packet: Packet = pickle.loads(base64.urlsafe_b64decode(data))
+            print("Recived:",packet)
+            if packet.protocol == Protocol.HTTP:
+                threading.Thread(target=handle_http_packet,args=(p,packet.data,)).start()
+            if packet.protocol == Protocol.CONTROL:
+                print(packet.data)
+        except (pickle.UnpicklingError,EOFError,binascii.Error):
+            print(data)
+        except KeyboardInterrupt:
+            p.kill()
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
+    if len(sys.argv) > 2:
         ssh_cmd = base64.urlsafe_b64decode(sys.argv[1]).decode()
         print(ssh_cmd)
         main(ssh_cmd)
     else:
-        main('ssh localhost')
+        main('ssh -tt localhost',"/home/jedbrooke/source/golem-network-requestor/proxy_server.py")
 

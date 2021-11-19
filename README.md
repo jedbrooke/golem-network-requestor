@@ -1,7 +1,7 @@
 # golem-network-requestor
 golem provider runtime with network access via http (socks5 coming soon) proxy
 
-Currently it is very limited. I have only tested it on small queries (fetching httpbin.org/uuid), so no idea if it will work on anything larger.
+Currently it is very limited. It should work on larger queries, and consecutive queries, and can only process 1 client at a time, so concurrent queries will simply wait to be served. only tested with HTTP GET requests. CONNECT fails for sure, have not tested POST or PUT.
 
 no HTTPS, only vanilla insecure http.
 
@@ -17,7 +17,8 @@ you will need:
 
 
 ## To run:
-first make sure your golem requestor environment is already set up
+first make sure your golem requestor environment is already set up, then run
+
 `python3 network_requestor.py`
 
 

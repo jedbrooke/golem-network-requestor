@@ -14,11 +14,8 @@ import time
 
 import ssh_tcp_connection
 
-# HASH = "94a2b142e986d326301f31cec31e20163c9347455aba0b7b19bf134e"
-# HASH = "8b0eb158c3b565c6d192627628b8cdc35a9ef167e7ab1ba8e57eef8f"
-# HASH = "15dbf496853ae3703aade5f484f0222981d2f2b6e2bf21c75f410487"
 # alpine based image
-HASH = "8e3fd0f88128a746db09bcd535fad03581698f265f5af38501ffc9d9"
+HASH = "07146c50ed1d35945063742e60daf35f7d76b2ef781df0f7152c04f0"
 # ssh example image
 # HASH = "1e06505997e8bd1b9e1a00bd10d255fc6a390905e4d6840a22a79902"
 
@@ -68,14 +65,20 @@ class NetworkProvider(Service):
         threading.Thread(target=ssh_tcp_connection.main,args=(ssh_cmd,),daemon=True).start()
 
         # wait for ssh connection to open
-        time.sleep(10)
+        time.sleep(15)
         
     async def run(self):
         print("running")
 
-        script = self._ctx.new_script(timeout=timedelta(seconds=30))
+        script = self._ctx.new_script(timeout=timedelta(seconds=100))
         print("running curl")
-        script.run("/bin/bash","-c", "curl --proxy http://localhost:4242 http://httpbin.org/uuid -H  \"accept: application/json\" -s > /golem/output/output.txt")
+        script.run("/bin/bash","-c","touch /golem/output/output.txt")
+        script.upload_file("get_payload.sh","/golem/work/get_payload.sh")
+        script.run("/bin/bash","-c","chmod +x /golem/work/get_payload.sh")
+        script.run("/bin/bash","-c","/golem/work/get_payload.sh")
+        # script.run("/bin/bash","-c", "curl --proxy http://localhost:4242 http://httpbin.org/uuid -H  \"accept: application/json\" -s | jq '.uuid' ")
+        # script.run("/bin/bash","-c","sleep 2")
+        # script.run("/bin/bash","-c", "curl --proxy http://localhost:4242 http://loripsum.net/api/100/short/headers -s >> /golem/output/output.txt")
         script.run("/bin/bash", "-c", f"echo from provider {self._ctx.provider_name} >> /golem/output/output.txt")
         yield script
 
@@ -88,7 +91,7 @@ class NetworkProvider(Service):
         yield script
 
 async def main():
-    enable_default_logger(log_file="output/output.log")
+    enable_default_logger(log_file="output/output.log",debug_activity_api=True,debug_payment_api=True)
     async with Golem(
         budget=0.1,
         subnet_tag="devnet-beta",

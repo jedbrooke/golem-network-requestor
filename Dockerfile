@@ -17,4 +17,5 @@ VOLUME /golem/input /golem/output /golem/work
 WORKDIR /golem/work
 
 COPY proxy_server.py /proxy_server.py
+COPY util.py /util.py
 RUN ls /golem/input
