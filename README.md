@@ -1,25 +1,29 @@
 # golem-network-requestor
-golem provider runtime with network access via http (socks5 coming soon) proxy
+golem provider runtime with network access via http (socks5 coming in the future) proxy
 
 Currently it is very limited. It should work on larger queries, and consecutive queries, and can only process 1 client at a time, so concurrent queries will simply wait to be served. only tested with HTTP GET requests. CONNECT fails for sure, have not tested POST or PUT.
 
 no HTTPS, only vanilla insecure http.
 
-There is also a lot of hard coded jank, in the coming days I will add a proper cli with arg parsing etc.
-
 # Usage
 you will need:
  * `websocat`
  * a ssh pubkey (you can generate this with `ssh-keygen`)
-    * you will need to update the `SSH_PUBKEY` variable in the `network_requestor.py` file with the appropriate path to your pubkey, default is `~/$USER/.ssh/id_rsa.pub`
+    * you can use the `--ssh_pubkey` arg if your ssh pubkey is in a different location. default is `~/.ssh/id_rsa.pub`
  * `python3`
     * tested on python 3.8, will probably work with 3.6+
 
 
-## To run:
+## To run the demo:
 first make sure your golem requestor environment is already set up, then run
 
 `python3 network_requestor.py`
+
+## To make your own networked requestors:
+click the "use this template" button to make a copy (not a fork) of this repo. Then, you can change the `get_payload.sh` file and put your own workload in there.
+just use `curl --proxy http://localhost:4242 [...]` for your curl requests.
+
+If you want to make your own docker container/gvmi, look at the comments in the `Dockerfile` to see which components are required, as well as the comments in the code for setting up the ssh connection. 
 
 
 # How does it work?

@@ -6,12 +6,12 @@ CONTAINER=network-golem
 build: Dockerfile 
 	sudo docker build -t $(IMAGE) .
 
-sheepit.gvmi: build
+network-golem.gvmi: build
 	sudo gvmkit-build $(IMAGE):latest -o $(IMAGE).gvmi
 
-image: sheepit.gvmi
+image: network-golem.gvmi
 
-gvmi-push: sheepit.gvmi
+gvmi-push: network-golem.gvmi
 	sudo gvmkit-build $(IMAGE):latest -o $(IMAGE).gvmi --push
 	
 
